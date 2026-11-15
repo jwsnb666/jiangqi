@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>将棋 · 创造模式</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% 0%,#3a2c1e,#150f09 70%);display:flex;flex-direction:column;align-items:center;font-family:"Yu Mincho","Hiragino Mincho ProN","SimSun",serif;color:#e8dcc8;padding:10px}
+.hand-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-height:40px;padding:4px 8px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;width:fit-content;margin:5px 0}
+.hand-piece{background:#f3ddb0;color:#2c1c08;padding:2px 8px;border-radius:4px;font-weight:700;font-size:14px;user-select:none}
+.hand-piece.clickable{cursor:pointer}.hand-piece.selected{box-shadow:0 0 0 3px #e04040}
+.board-wrap{position:relative;margin:5px 0}canvas{display:block;border-radius:6px;box-shadow:0 10px 30px rgba(0,0,0,.7);background:#e9c98b}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;margin-top:5px;background:rgba(0,0,0,.3);padding:8px;border-radius:8px;max-width:96vw}
+button{font-family:inherit;font-size:14px;padding:6px 12px;border-radius:6px;border:1px solid #c9a227;background:linear-gradient(#f3ddb0,#dcb878);color:#2c1c08;font-weight:700;cursor:pointer}
+button:hover{background:linear-gradient(#fff2d4,#e8c88c)}
+button.active{background:#e04040;color:#fff;border-color:#a02020}
+#status{font-size:16px;margin:10px 0;color:#ffd166;font-weight:bold;min-height:22px;text-align:center}
+.promo{position:absolute;transform:translate(-50%,-50%);display:flex;gap:8px;background:#241a10;padding:10px;border-radius:10px;z-index:10;box-shadow:0 8px 24px rgba(0,0,0,.8)}
+.promo.hidden{display:none}.promo button{padding:8px 16px;font-size:18px}
+</style>
+</head>
+<body>
+<div id="status">编辑模式：请先摆放棋子</div>
+<div class="hand-row" id="hand-gote"></div>
+<div class="board-wrap"><canvas id="board" width="560" height="560"></canvas><div class="promo hidden" id="promo"><button id="btn-promote">成</button><button id="btn-nopromote">不成</button></div></div>
+<div class="hand-row" id="hand-sente"></div>
+<div class="toolbar" id="edit-tools">
+  <span>选子:</span>
+  <button class="tool-btn" data-owner="1" data-type="K">王将</button>
+  <button class="tool-btn" data-owner="-1" data-type="K">玉将</button>
+  <button class="tool-btn" data-owner="1" data-type="R">先飛車</button>
+  <button class="tool-btn" data-owner="-1" data-type="R">后飛車</button>
+  <button class="tool-btn" data-owner="1" data-type="P">先歩兵</button>
+  <button class="tool-btn" data-owner="-1" data-type="P">后歩兵</button>
+  <button class="tool-btn" data-owner="1" data-type="G">先金将</button>
+  <button class="tool-btn" data-owner="-1" data-type="G">后金将</button>
+  <button class="tool-btn" data-owner="1" data-type="B">先角行</button>
+  <button class="tool-btn" data-owner="-1" data-type="B">后角行</button>
+  <button class="tool-btn" data-owner="1" data-type="S">先銀将</button>
+  <button class="tool-btn" data-owner="-1" data-type="S">后銀将</button>
+  <button class="tool-btn" data-owner="1" data-type="N">先桂馬</button>
+  <button class="tool-btn" data-owner="-1" data-type="N">后桂馬</button>
+  <button class="tool-btn" data-owner="1" data-type="L">先香車</button>
+  <button class="tool-btn" data-owner="-1" data-type="L">后香車</button>
+  <button style="background:#c0392b;color:white;border-color:#7a1f16" id="startBtn">开始对战</button>
+  <button style="background:#7f8c8d;color:white;border-color:#4a5353" id="clearBtn">清空</button>
+</div>
+<div class="toolbar hidden" id="play-tools">
+  <button style="background:#2980b9;color:white;border-color:#1a5276" onclick="location.href='index.html'">主菜单</button>
+  <button style="background:#c0392b;color:white;border-color:#7a1f16" id="restartBtn">重新编辑</button>
+</div>
+<script src="sfx.js"></script>
+<script>
+const N=9,CELL=56,MARGIN=22,SIZE=N*CELL+MARGIN*2;
+const PIECE_NAMES={K:'王将',R:'飛車',B:'角行',G:'金将',S:'銀将',N:'桂馬',L:'香車',P:'歩兵'};
+const PROMOTED_NAMES={K:'王将',R:'龍王',B:'龍馬',G:'金将',S:'成銀',N:'成桂',L:'成香',P:'と金'};
+const PROMOTABLE=new Set(['P','L','N','S','B','R']),DROPPABLE=['P','L','N','S','G','B','R'],HAND_ORDER=['R','B','G','S','N','L','P'];
+const inside=(r,c)=>r>=0&&r<N&&c>=0&&c<N,cloneBoard=b=>b.map(row=>row.map(p=>p?{...p}:null));
+function pieceName(p){if(p.type==='K')return p.owner===1?'王将':'玉将';return p.promoted?PROMOTED_NAMES[p.type]:PIECE_NAMES[p.type];}
+function generatePieceMoves(board,r,c){const p=board[r][c];if(!p)return[];const owner=p.owner,f=-owner,base=p.type;const DIAG=[[-1,-1],[-1,1],[1,-1],[1,1]],ORTH=[[-1,0],[1,0],[0,-1],[0,1]],goldSteps=[[f,-1],[f,0],[f,1],[0,-1],[0,1],[-f,0]];let steps=[],slides=[];if(p.promoted&&['P','L','N','S'].includes(base))steps=goldSteps;else if(p.promoted&&base==='B'){slides=DIAG;steps=ORTH;}else if(p.promoted&&base==='R'){slides=ORTH;steps=DIAG;}else switch(base){case'P':steps=[[f,0]];break;case'L':slides=[[f,0]];break;case'N':steps=[[2*f,-1],[2*f,1]];break;case'S':steps=[[f,-1],[f,0],[f,1],[-f,-1],[-f,1]];break;case'G':steps=goldSteps;break;case'K':steps=[...DIAG,...ORTH];break;case'B':slides=DIAG;break;case'R':slides=ORTH;break;}const out=[];for(const[dr,dc]of steps){const nr=r+dr,nc=c+dc;if(!inside(nr,nc))continue;const t=board[nr][nc];if(t&&t.owner===owner)continue;out.push([nr,nc]);}for(const[dr,dc]of slides){let nr=r+dr,nc=c+dc;while(inside(nr,nc)){const t=board[nr][nc];if(t){if(t.owner!==owner)out.push([nr,nc]);break;}out.push([nr,nc]);nr+=dr;nc+=dc;}}return out;}
+function inPromoZone(owner,r){return owner===1?r<=2:r>=6;}
+function canPromote(p,fr,tr){if(p.promoted||!PROMOTABLE.has(p.type))return false;return inPromoZone(p.owner,fr)||inPromoZone(p.owner,tr);}
+function mustPromote(p,tr){if(p.promoted)return false;const last=p.owner===1?0:8,sl=p.owner===1?1:7;if(p.type==='P'||p.type==='L')return tr===last;if(p.type==='N')return tr===last||tr===sl;return false;}
+function findKing(board,owner){for(let r=0;r<N;r++)for(let c=0;c<N;c++){const p=board[r][c];if(p&&p.owner===owner&&p.type==='K')return[r,c];}return null;}
+function isInCheck(board,owner){const k=findKing(board,owner);if(!k)return true;const[kr,kc]=k;for(let r=0;r<N;r++)for(let c=0;c<N;c++){const p=board[r][c];if(!p||p.owner!==-owner)continue;for(const[mr,mc]of generatePieceMoves(board,r,c))if(mr===kr&&mc===kc)return true;}return false;}
+function applyMove(board,hands,move,owner){const nb=cloneBoard(board),nh={1:{...hands[1]},'-1':{...hands['-1']}};if(move.drop){nb[move.to[0]][move.to[1]]={type:move.drop,owner,promoted:false};nh[owner][move.drop]=(nh[owner][move.drop]||0)-1;if(nh[owner][move.drop]<=0)delete nh[owner][move.drop];}else{const[fr,fc]=move.from,[tr,tc]=move.to,piece=nb[fr][fc],cap=nb[tr][tc];if(cap)nh[owner][cap.type]=(nh[owner][cap.type]||0)+1;nb[tr][tc]={type:piece.type,owner,promoted:piece.promoted||!!move.promote};nb[fr][fc]=null;}return{board:nb,hands:nh};}
+function canDropAt(board,type,r,c,owner){if(board[r][c])return false;const last=owner===1?0:8,sl=owner===1?1:7;if((type==='P'||type==='L')&&r===last)return false;if(type==='N'&&(r===last||r===sl))return false;if(type==='P'){for(let rr=0;rr<N;rr++){const p=board[rr][c];if(p&&p.owner===owner&&p.type==='P'&&!p.promoted)return false;}}return true;}
+function isLegalMove(board,hands,move,owner,nuf){const res=applyMove(board,hands,move,owner);if(isInCheck(res.board,owner))return false;if(!nuf&&move.drop==='P'){if(isInCheck(res.board,-owner)){if(!hasAnyLegalMove(res.board,res.hands,-owner,true))return false;}}return true;}
+function hasAnyLegalMove(board,hands,owner,nuf){for(let r=0;r<N;r++)for(let c=0;c<N;c++){const p=board[r][c];if(!p||p.owner!==owner)continue;for(const[tr,tc]of generatePieceMoves(board,r,c)){const must=mustPromote(p,tr),can=canPromote(p,r,tr);if(!must&&isLegalMove(board,hands,{from:[r,c],to:[tr,tc],promote:false},owner,nuf))return true;if(can&&isLegalMove(board,hands,{from:[r,c],to:[tr,tc],promote:true},owner,nuf))return true;}}for(const t of DROPPABLE){if(!hands[owner][t])continue;for(let r=0;r<N;r++)for(let c=0;c<N;c++){if(!canDropAt(board,t,r,c,owner))continue;if(isLegalMove(board,hands,{drop:t,to:[r,c]},owner,nuf))return true;}}return false;}
+let board=[],hands={1:{},'-1':{}},turn=1,selected=null,legalMoves=[],gameOver=false,statusText='',lastMove=null,pendingPromotion=null;
+let isEditMode=true,currentBrush={owner:1,type:null};
+const canvas=document.getElementById('board'),ctx=canvas.getContext('2d'),dpr=window.devicePixelRatio||1;
+canvas.width=SIZE*dpr;canvas.height=SIZE*dpr;canvas.style.width=SIZE+'px';canvas.style.height=SIZE+'px';ctx.scale(dpr,dpr);
+const promoEl=document.getElementById('promo');
+function hidePromo(){promoEl.classList.add('hidden');pendingPromotion=null;}
+function log(msg){document.getElementById('status').textContent=msg;}
+function initEditMode(){isEditMode=true;gameOver=false;board=Array.from({length:N},()=>Array(N).fill(null));hands={1:{},'-1':{}};document.getElementById('edit-tools').classList.remove('hidden');document.getElementById('play-tools').classList.add('hidden');document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active'));currentBrush={owner:1,type:null};selected=null;legalMoves=[];lastMove=null;renderHands();log('编辑模式：请先摆放棋子');draw();}
+function startGame(){
+let k1=0,k2=0;
+for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+let p=board[r][c];if(!p)continue;
+if(p.type==='K'){if(p.owner===1)k1++;else k2++;}
+if(p.type==='P'||p.type==='L'){if((p.owner===1&&r===0)||(p.owner===-1&&r===8)){log('错误：步/香不能放最底线！');return;}}
+if(p.type==='N'){if((p.owner===1&&r<=1)||(p.owner===-1&&r>=7)){log('错误：桂马不能放最底两线！');return;}}
+if(p.type==='P'&&!p.promoted){let cnt=0;for(let rr=0;rr<N;rr++)if(board[rr][c]&&board[rr][c].owner===p.owner&&board[rr][c].type==='P'&&!board[rr][c].promoted)cnt++;if(cnt>=2){log('错误：同一列不能有两个未升变步兵（二歩）！');return;}}
+}
+if(k1!==1){log('失败：先手必须且只能有1个王将！');return;}
+if(k2!==1){log('失败：后手必须且只能有1个玉将！');return;}
+if(isInCheck(board,1)){log('失败：先手处于被将军状态（非走即防）！');return;}
+if(isInCheck(board,-1)){log('失败：后手处于被将军状态（非走即防）！');return;}
+isEditMode=false;turn=1;selected=null;legalMoves=[];lastMove=null;
+document.getElementById('edit-tools').classList.add('hidden');document.getElementById('play-tools').classList.remove('hidden');renderHands();updateStatus();draw();
+}
+function renderHands(){
+if(isEditMode){
+const brd=document.getElementById('hand-sente');brd.innerHTML='<span>先手加驹: </span>';
+for(const t of HAND_ORDER){let btn=document.createElement('button');btn.style.padding='2px 6px';btn.textContent='+'+PIECE_NAMES[t];btn.onclick=()=>{hands[1][t]=(hands[1][t]||0)+1;renderHands();};brd.appendChild(btn);}
+const brd2=document.getElementById('hand-gote');brd2.innerHTML='<span>后手加驹: </span>';
+for(const t of HAND_ORDER){let btn=document.createElement('button');btn.style.padding='2px 6px';btn.textContent='+'+PIECE_NAMES[t];btn.onclick=()=>{hands[-1][t]=(hands[-1][t]||0)+1;renderHands();};brd2.appendChild(btn);}
+}else{
+for(const owner of[1,-1]){
+const el=document.getElementById(owner===1?'hand-sente':'hand-gote');el.innerHTML='';
+const label=document.createElement('span');label.className='hand-label';label.textContent=owner===1?'先手 ▲':'後手 ▼';el.appendChild(label);
+let count=0;
+for(const t of HAND_ORDER){const n=hands[owner][t]||0;if(!n)continue;count++;
+const d=document.createElement('div');d.className='hand-piece';d.textContent=PIECE_NAMES[t]+(n>1?'×'+n:'');
+if(!gameOver&&owner===turn){d.classList.add('clickable');d.onclick=()=>selectHandPiece(t,owner);if(selected&&selected.hand===t)d.classList.add('selected');}else d.classList.add('disabled');el.appendChild(d);}
+if(count===0){const empty=document.createElement('span');empty.className='hand-empty';empty.textContent='（无持子）';el.appendChild(empty);}
+}
+}
+}
+function seededRandom(i){const x=Math.sin(i*127.1)*43758.5453;return x-Math.floor(x);}
+function drawPiece(r,c,piece){const cx=MARGIN+c*CELL+CELL/2,cy=MARGIN+r*CELL+CELL/2,s=CELL*0.86;ctx.save();ctx.translate(cx,cy);if(piece.owner===-1)ctx.rotate(Math.PI);const w=s*0.46,h=s*0.5;ctx.shadowColor='rgba(0,0,0,.45)';ctx.shadowBlur=5;ctx.shadowOffsetY=2.5;ctx.beginPath();ctx.moveTo(-w,h);ctx.lineTo(w,h);ctx.lineTo(w,-h*0.36);ctx.lineTo(0,-h);ctx.lineTo(-w,-h*0.36);ctx.closePath();const grad=ctx.createLinearGradient(0,-h,0,h);grad.addColorStop(0,'#f7e5bd');grad.addColorStop(1,'#dcb878');ctx.fillStyle=grad;ctx.fill();ctx.shadowColor='transparent';ctx.strokeStyle='#5a3a14';ctx.lineWidth=1.4;ctx.stroke();ctx.restore();ctx.save();ctx.translate(cx,cy);ctx.fillStyle=piece.promoted?'#c0392b':'#2a1a06';ctx.font=`700 ${Math.round(s*0.40)}px "Yu Mincho","SimSun",serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(pieceName(piece),0,0);ctx.restore();}
+function draw(){
+const bg=ctx.createLinearGradient(0,0,SIZE,SIZE);bg.addColorStop(0,'#eccb92');bg.addColorStop(.5,'#e2bd7e');bg.addColorStop(1,'#d3aa68');ctx.fillStyle=bg;ctx.fillRect(0,0,SIZE,SIZE);
+ctx.save();ctx.globalAlpha=0.06;ctx.strokeStyle='#6b4a22';ctx.lineWidth=1;for(let i=0;i<40;i++){const y=seededRandom(i)*SIZE,d1=seededRandom(i+100)*12-6,d2=seededRandom(i+200)*12-6;ctx.beginPath();ctx.moveTo(0,y);ctx.bezierCurveTo(SIZE*.3,y+d1,SIZE*.7,y+d2,SIZE,y+2);ctx.stroke();}ctx.restore();
+ctx.strokeStyle='#7a5326';ctx.lineWidth=1.3;for(let i=0;i<=N;i++){const p=MARGIN+i*CELL;ctx.beginPath();ctx.moveTo(MARGIN,p);ctx.lineTo(MARGIN+N*CELL,p);ctx.stroke();ctx.beginPath();ctx.moveTo(p,MARGIN);ctx.lineTo(p,MARGIN+N*CELL);ctx.stroke();}
+ctx.lineWidth=2.6;ctx.strokeStyle='#5a3a14';ctx.strokeRect(MARGIN,MARGIN,N*CELL,N*CELL);
+if(lastMove){const[r,c]=lastMove.to;ctx.fillStyle='rgba(60,140,255,.22)';ctx.fillRect(MARGIN+c*CELL,MARGIN+r*CELL,CELL,CELL);}
+if(selected&&selected.r!==undefined){ctx.fillStyle='rgba(255,196,0,.42)';ctx.fillRect(MARGIN+selected.c*CELL,MARGIN+selected.r*CELL,CELL,CELL);}
+const seen=new Set();for(const m of legalMoves){const key=m.to[0]+','+m.to[1];if(seen.has(key))continue;seen.add(key);const[r,c]=m.to,cx=MARGIN+c*CELL+CELL/2,cy=MARGIN+r*CELL+CELL/2;if(board[r][c]){ctx.beginPath();ctx.arc(cx,cy,CELL*0.42,0,Math.PI*2);ctx.strokeStyle='rgba(200,40,40,.8)';ctx.lineWidth=3;ctx.stroke();}else{ctx.beginPath();ctx.arc(cx,cy,CELL*0.14,0,Math.PI*2);ctx.fillStyle='rgba(40,110,40,.55)';ctx.fill();}}
+for(let r=0;r<N;r++)for(let c=0;c<N;c++){const p=board[r][c];if(p)drawPiece(r,c,p);}
+}
+function selectHandPiece(type,owner){
+if(isEditMode||gameOver||turn!==owner||!hands[owner][type])return;
+selected={hand:type};legalMoves=[];for(let r=0;r<N;r++)for(let c=0;c<N;c++){if(!canDropAt(board,type,r,c,turn))continue;const m={drop:type,to:[r,c]};if(isLegalMove(board,hands,m,turn))legalMoves.push(m);}
+renderHands();updateStatus();draw();SFX.play('select');
+}
+function getLegalMovesFrom(r,c){
+const p=board[r][c];if(!p)return[];const res=[];
+for(const[tr,tc]of generatePieceMoves(board,r,c)){const must=mustPromote(p,tr),can=canPromote(p,r,tr);
+if(must){const m={from:[r,c],to:[tr,tc],promote:true};if(isLegalMove(board,hands,m,turn))res.push(m);}
+else{const m={from:[r,c],to:[tr,tc],promote:false};if(isLegalMove(board,hands,m,turn))res.push(m);if(can){const m2={from:[r,c],to:[tr,tc],promote:true};if(isLegalMove(board,hands,m2,turn))res.push(m2);}}}
+return res;
+}
+function handleBoardClick(r,c){
+if(!inside(r,c))return;
+if(isEditMode){
+if(currentBrush.type===null){if(board[r][c]){board[r][c]=null;draw();return;}alert('请先选子！');return;}
+if(board[r][c]&&board[r][c].owner===currentBrush.owner&&board[r][c].type===currentBrush.type){board[r][c]=null;}else{board[r][c]={type:currentBrush.type,owner:currentBrush.owner,promoted:false};}
+draw();return;
+}
+if(gameOver)return;
+if(selected){const opts=legalMoves.filter(m=>m.to[0]===r&&m.to[1]===c);if(opts.length>0){if(opts.length>1)showPromoChoice(opts);else doMove(opts[0]);return;}}
+const p=board[r][c];if(p&&p.owner===turn){selected={r,c};legalMoves=getLegalMovesFrom(r,c);renderHands();draw();SFX.play('select');}else{if(selected)SFX.play('illegal');selected=null;legalMoves=[];renderHands();draw();}
+}
+canvas.addEventListener('click',e=>{const rect=canvas.getBoundingClientRect();const x=(e.clientX-rect.left)*(SIZE/rect.width),y=(e.clientY-rect.top)*(SIZE/rect.height);handleBoardClick(Math.floor((y-MARGIN)/CELL),Math.floor((x-MARGIN)/CELL));});
+function showPromoChoice(opts){pendingPromotion=opts;const[r,c]=opts[0].to;promoEl.style.left=(MARGIN+c*CELL+CELL/2)+'px';promoEl.style.top=(MARGIN+r*CELL+CELL/2)+'px';promoEl.classList.remove('hidden');}
+document.getElementById('btn-promote').onclick=()=>{if(!pendingPromotion)return;const m=pendingPromotion.find(o=>o.promote);hidePromo();if(m)doMove(m);};
+document.getElementById('btn-nopromote').onclick=()=>{if(!pendingPromotion)return;const m=pendingPromotion.find(o=>!o.promote);hidePromo();if(m)doMove(m);};
+function doMove(move){
+const captured=!move.drop&&!!board[move.to[0]][move.to[1]];const res=applyMove(board,hands,move,turn);
+board=res.board;hands=res.hands;lastMove=move;selected=null;legalMoves=[];turn=-turn;
+const inCheck=isInCheck(board,turn),alive=hasAnyLegalMove(board,hands,turn,false);
+if(!alive){gameOver=true;statusText=inCheck?`詰み！胜利 🎉`:`无子可动，胜利`;}
+renderHands();updateStatus();draw();
+SFX.play(SFX.classify({kind:move.drop?'drop':'move',capture:captured,promoted:!!move.promote,check:inCheck,checkmate:!alive}));
+}
+function updateStatus(){const el=document.getElementById('status');el.classList.remove('check');if(gameOver){el.textContent=statusText;return;}const checked=isInCheck(board,turn);el.textContent=(turn===1?'先手':'後手')+'回合'+(checked?' · 王手（将军）！':'');}
+document.querySelectorAll('.tool-btn').forEach(btn=>{btn.onclick=()=>{document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentBrush.owner=parseInt(btn.dataset.owner);currentBrush.type=btn.dataset.type;};});
+document.getElementById('startBtn').onclick=startGame;
+document.getElementById('clearBtn').onclick=()=>{initEditMode();};
+document.getElementById('restartBtn').onclick=()=>{initEditMode();};
+document.addEventListener('pointerdown',()=>SFX.init(),{once:true});
+initEditMode();
+</script>
+</body>
+</html>

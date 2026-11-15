@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>将棋</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% 0%,#3a2c1e,#150f09 70%);display:flex;align-items:center;justify-content:center;font-family:"Yu Mincho","Hiragino Mincho ProN","Songti SC","SimSun",serif;color:#e8dcc8}
+.menu{display:flex;flex-direction:column;align-items:center;gap:16px;padding:40px 48px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.1);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.menu h1{margin:0;font-size:34px;letter-spacing:6px;font-weight:700;color:#f3ddb0;text-shadow:0 2px 8px rgba(0,0,0,.6)}
+.menu p{margin:0 0 8px;font-size:14px;color:#b9a888;letter-spacing:2px}
+.menu button{font-family:inherit;font-size:19px;font-weight:700;letter-spacing:3px;padding:14px 56px;border-radius:10px;border:2px solid #c9a227;background:linear-gradient(#f3ddb0,#dcb878);color:#2c1c08;cursor:pointer;transition:transform .1s,box-shadow .15s;width:100%}
+.menu button:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,0,0,.5);background:linear-gradient(#fff2d4,#e8c88c)}
+.menu button:active{transform:translateY(0)}
+</style>
+</head>
+<body>
+<div class="menu">
+<h1>将棋</h1>
+<p>SHOGI</p >
+<button onclick="location.href='shogi.html'">双人对战</button>
+<button onclick="location.href='shogi-ai.html'">人机对战</button>
+<button onclick="location.href='online.html'">联机对战</button>
+<button onclick="location.href='create.html'">创造模式</button>
+</div>
+</body>
+</html>
