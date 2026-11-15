@@ -4,28 +4,29 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>联机对战</title>
 <style>
-*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% 0%,#3a2c1e,#150f09 70%);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:"Yu Mincho","Hiragino Mincho ProN","Songti SC","SimSun",serif;color:#e8dcc8;padding:16px}
-.wrap{display:flex;flex-direction:column;gap:10px;width:fit-content}
-.hand-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-height:48px;padding:6px 12px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.09);border-radius:10px}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% 0%,#3a2c1e,#150f09 70%);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:"Yu Mincho","Hiragino Mincho ProN","Songti SC","SimSun",serif;color:#e8dcc8;padding:16px}
+.wrap{display:flex;flex-direction:column;gap:10px;width:fit-content;max-width:100%}
+.hand-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-height:40px;padding:6px 12px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.09);border-radius:10px;justify-content:center}
 .hand-label{font-size:14px;color:#b9a888;margin-right:4px;letter-spacing:1px}
 .hand-empty{font-size:13px;color:#6b5c46}
 .hand-piece{display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;padding:0 8px;background:linear-gradient(#f3ddb0,#dcb878);color:#2c1c08;border:2px solid #8b5e2a;border-radius:5px;font-size:14px;font-weight:700;user-select:none}
 .hand-piece.disabled{opacity:.55}
-.board-wrap{position:relative}
-canvas{display:block;border-radius:6px;box-shadow:0 10px 30px rgba(0,0,0,.7);background:#e9c98b;max-width:96vw;height:auto;touch-action:manipulation}
+.board-wrap{position:relative;display:flex;justify-content:center}
+canvas{display:block;border-radius:6px;box-shadow:0 14px 40px rgba(0,0,0,.7);max-width:96vw;height:auto;touch-action:manipulation}
 .promo{position:absolute;transform:translate(-50%,-50%);display:flex;gap:8px;background:#241a10;padding:10px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.65);z-index:10}
 .promo.hidden{display:none}
 .promo button{font-family:inherit;font-size:19px;font-weight:700;padding:8px 16px;border-radius:7px;border:2px solid #c9a227;background:linear-gradient(#f3ddb0,#dcb878);color:#2c1c08;cursor:pointer}
-.toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 4px;flex-wrap:wrap}
-#status{font-size:15px;letter-spacing:1px}
+.toolbar{display:flex;align-items:center;justify-content:center;gap:10px;padding:0 4px;flex-wrap:wrap}
+#status{font-size:15px;letter-spacing:1px;text-align:center;width:100%}
 #status.check{color:#ff8a6a}
-.btns{display:flex;gap:6px;flex-wrap:wrap}
+.btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
 button.act{font-family:inherit;font-size:13px;padding:7px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#e8dcc8;cursor:pointer}
 button.act:hover{background:rgba(255,255,255,.16)}
 button.act:disabled{opacity:.4;cursor:not-allowed}
-#lobby{display:flex;flex-direction:column;gap:14px;padding:30px 36px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.1);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.6);align-items:center}
+#lobby{display:flex;flex-direction:column;gap:14px;padding:30px 36px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.1);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.6);align-items:center;max-width:96vw}
 #lobby h2{margin:0;font-size:22px;letter-spacing:3px;color:#f3ddb0}
-#lobby input{font-family:inherit;font-size:18px;padding:10px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.25);color:#e8dcc8;text-align:center;letter-spacing:4px;width:220px}
+#lobby input{font-family:inherit;font-size:18px;padding:10px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.25);color:#e8dcc8;text-align:center;letter-spacing:4px;width:220px;max-width:100%}
 #lobby .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
 #lobby button{font-family:inherit;font-size:16px;font-weight:700;padding:10px 22px;border-radius:8px;border:2px solid #c9a227;background:linear-gradient(#f3ddb0,#dcb878);color:#2c1c08;cursor:pointer}
 #lobby button:hover{background:linear-gradient(#fff2d4,#e8c88c)}
@@ -85,14 +86,8 @@ let animating = null;
 const canvas=document.getElementById('board'),ctx=canvas.getContext('2d'),dpr=window.devicePixelRatio||1;
 canvas.width=SIZE*dpr;canvas.height=SIZE*dpr;canvas.style.width=SIZE+'px';canvas.style.height=SIZE+'px';ctx.scale(dpr,dpr);
 const promoEl=document.getElementById('promo');
-
-// ==========================================
-// 🤖 给 Python AI 留的物理外挂接口
-// ==========================================
 window.getGameState = () => ({ board: board, turn: turn, animating: animating });
 window.botMove = (fr, fc, tr, tc) => { doMove({ from: [fr, fc], to: [tr, tc], promote: false }, false); };
-// ==========================================
-
 function hidePromo(){promoEl.classList.add('hidden');pendingPromotion=null;}
 function log(msg){document.getElementById('log').textContent=msg;}
 function initGame(){board=createBoard();hands={1:{},[-1]:{}};turn=1;selected=null;legalMoves=[];gameOver=false;statusText='';lastMove=null;pendingPromotion=null;history=[];animating=null;hidePromo();renderHands();updateStatus();draw();}
@@ -129,7 +124,7 @@ if(selected&&selected.r!==undefined){let r=selected.r,c=selected.c;if(viewOwner=
 const seen=new Set();
 for(const m of legalMoves){const key=m.to[0]+','+m.to[1];if(seen.has(key))continue;seen.add(key);let[r,c]=m.to;if(viewOwner===-1){r=N-1-r;c=N-1-c;}const cx=MARGIN+c*CELL+CELL/2,cy=MARGIN+r*CELL+CELL/2;if(board[m.to[0]][m.to[1]]){ctx.beginPath();ctx.arc(cx,cy,CELL*0.42,0,Math.PI*2);ctx.strokeStyle='rgba(200,40,40,.8)';ctx.lineWidth=3;ctx.stroke();}else{ctx.beginPath();ctx.arc(cx,cy,CELL*0.14,0,Math.PI*2);ctx.fillStyle='rgba(40,110,40,.55)';ctx.fill();}}
 for(let r=0;r<N;r++)for(let c=0;c<N;c++){const p=board[r][c];if(p&&!(animating&&animating.to[0]===r&&animating.to[1]===c))drawPiece(r,c,p);}
-if(animating){const t=Math.min((performance.now()-animating.start)/150,1),e=1-Math.pow(1-t,3),sx=MARGIN+animating.from[1]*CELL+CELL/2,sy=MARGIN+animating.from[0]*CELL+CELL/2,ex=MARGIN+animating.to[1]*CELL+CELL/2,ey=MARGIN+animating.to[0]*CELL+CELL/2;drawPiece(animating.from[0]+(animating.to[0]-animating.from[0])*t,animating.from[1]+(animating.to[1]-animating.from[1])*t,animating.piece);if(t<1)requestAnimationFrame(draw);else{animating=null;finish();}}
+if(animating){const t=Math.min((performance.now()-animating.start)/150,1);let drawR = animating.from[0] + (animating.to[0]-animating.from[0])*t;let drawC = animating.from[1] + (animating.to[1]-animating.from[1])*t;drawPiece(drawR,drawC,animating.piece);if(t<1)requestAnimationFrame(draw);else{finish();}}
 }
 function getLegalMovesFrom(r,c){const p=board[r][c];if(!p)return[];const res=[];for(const[tr,tc]of generatePieceMoves(board,r,c)){const must=mustPromote(p,tr),can=canPromote(p,r,tr);if(must){const m={from:[r,c],to:[tr,tc],promote:true};if(isLegalMove(board,hands,m,turn))res.push(m);}else{const m={from:[r,c],to:[tr,tc],promote:false};if(isLegalMove(board,hands,m,turn))res.push(m);if(can){const m2={from:[r,c],to:[tr,tc],promote:true};if(isLegalMove(board,hands,m2,turn))res.push(m2);}}}return res;}
 function selectHandPiece(type,owner){if(gameOver||!opponentReady||turn!==owner||!hands[owner][type]||animating)return;selected={hand:type};legalMoves=[];for(let r=0;r<N;r++)for(let c=0;c<N;c++){if(!canDropAt(board,type,r,c,turn))continue;const m={drop:type,to:[r,c]};if(isLegalMove(board,hands,m,turn))legalMoves.push(m);}renderHands();const st=document.getElementById('status');st.classList.remove('check');if(legalMoves.length===0){if(type==='P')st.textContent='二歩限制';else st.textContent='无合法打入点';}else st.textContent='选择落点';draw();if(window.SFX)SFX.play('select');}
@@ -138,7 +133,7 @@ canvas.addEventListener('click',e=>{const rect=canvas.getBoundingClientRect(),x=
 function showPromoChoice(opts){pendingPromotion=opts;let[r,c]=opts[0].to;if(viewOwner===-1){r=N-1-r;c=N-1-c;}promoEl.style.left=(MARGIN+c*CELL+CELL/2)+'px';promoEl.style.top=(MARGIN+r*CELL+CELL/2)+'px';promoEl.classList.remove('hidden');}
 document.getElementById('btn-promote').onclick=()=>{if(!pendingPromotion)return;const m=pendingPromotion.find(o=>o.promote);hidePromo();if(m)doMove(m,false);};
 document.getElementById('btn-nopromote').onclick=()=>{if(!pendingPromotion)return;const m=pendingPromotion.find(o=>!o.promote);hidePromo();if(m)doMove(m,false);};
-function doMove(move,fromRemote){
+function doMove(move, fromRemote){
 const captured=!move.drop&&!!board[move.to[0]][move.to[1]];
 const prevBoard=cloneBoard(board),prevHands={1:{...hands[1]},[-1]:{...hands[-1]}},prevTurn=turn,prevLast=lastMove;
 history.push({board:prevBoard,hands:prevHands,turn:prevTurn,lastMove:prevLast});
@@ -148,15 +143,26 @@ const inCheck=isInCheck(board,turn);
 const alive=hasAnyLegalMove(board,hands,turn,false);
 if(!alive){gameOver=true;statusText=inCheck?`詰み！${turn===1?'後手':'先手'}的胜利 🎉`:`${turn===1?'後手':'先手'}无子可动，${turn===1?'先手':'後手'}获胜`;}
 renderHands();updateStatus();
-if(move.drop||fromRemote){execMove(move,captured,inCheck,alive,fromRemote);}else{const piece=board[move.from[0]][move.from[1]];animating={from:move.from,to:move.to,piece,start:performance.now(),mv:move,captured,inCheck,alive,remote:fromRemote};requestAnimationFrame(draw);}
+if(move.drop||fromRemote){ 
+    execMove(move,captured,inCheck,alive,fromRemote);
+}else{
+    const piece=prevBoard[move.from[0]][move.from[1]];
+    animating={from:move.from,to:move.to,piece,start:performance.now(),mv:move,captured,inCheck,alive,remote:fromRemote};
+    requestAnimationFrame(draw);
+}
 }
 function execMove(move,captured,inCheck,alive,fromRemote){
 renderHands();updateStatus();draw();
 if(window.SFX)SFX.play(SFX.classify({kind:move.drop?'drop':'move',capture:captured,promoted:!!move.promote,check:inCheck,checkmate:!alive}));
 if(!fromRemote)sendMove(move);
 }
-function finish(){const{mv,captured,inCheck,alive,remote}=animating;animating=null;execMove(mv,captured,inCheck,alive,remote);}
-function sendMove(move){if(!client||!connected)return;const msg={type:'move',move,from:myRole,board:board};client.publish(`shogi/${roomId}/ctrl`,JSON.stringify(msg));}
+function finish(){
+if(!animating) return;
+const{mv,captured,inCheck,alive,remote}=animating;
+animating=null;
+execMove(mv,captured,inCheck,alive,remote);
+}
+function sendMove(move){if(!client||!connected)return;const msg={type:'move',move,from:myRole};client.publish(`shogi/${roomId}/ctrl`,JSON.stringify(msg));}
 function updateStatus(){const el=document.getElementById('status');el.classList.remove('check');if(!connected){el.textContent='未连接';return;}if(gameOver){el.textContent=statusText;return;}if(!opponentReady&&myRole===1){el.textContent='等待对手加入…';return;}const checked=isInCheck(board,turn),mine=turn===myRole;el.textContent=(mine?'你的回合':(turn===1?'先手回合':'後手回合'))+(checked?' · 王手！':'');if(checked)el.classList.add('check');}
 function renderHands(){for(const owner of[1,-1]){const el=document.getElementById(owner===1?'hand-sente':'hand-gote');el.innerHTML='';const label=document.createElement('span');label.className='hand-label';label.textContent=owner===1?'先手 ▲':'後手 ▼';el.appendChild(label);let count=0;for(const t of HAND_ORDER){const n=hands[owner][t]||0;if(!n)continue;count++;const d=document.createElement('div');d.className='hand-piece'+(opponentReady&&owner===myRole&&turn===owner&&!gameOver&&!animating?'':' disabled');d.textContent=PIECE_NAMES[t]+(n>1?'×'+n:'');if(opponentReady&&owner===myRole&&turn===owner&&!gameOver&&!animating)d.onclick=()=>selectHandPiece(t,owner);el.appendChild(d);}if(count===0){const empty=document.createElement('span');empty.className='hand-empty';empty.textContent='（无持子）';el.appendChild(empty);}}}
 function startGame(){document.getElementById('lobby').classList.add('hidden');document.getElementById('gameUI').classList.remove('hidden');initGame();}
@@ -164,7 +170,7 @@ function connectMQTT(topicRole,cb){const host='broker.emqx.io',port=8084,clientI
 function handleMessage(msg){
 if(msg.type==='hello'){if(msg.role===myRole)return;opponentReady=true;if(myRole===1){client.publish(`shogi/${roomId}/ctrl`,JSON.stringify({type:'ready'}));}log('对手已加入');updateStatus();if(myRole===1){document.getElementById('restartBtn').disabled=false;}renderHands();draw();}
 else if(msg.type==='ready'){opponentReady=true;log('对手已就绪');updateStatus();renderHands();draw();}
-else if(msg.type==='move'){if(msg.from===myRole)return;if(msg.board)board=msg.board;doMove(msg.move,true);}
+else if(msg.type==='move'){if(msg.from===myRole)return;doMove(msg.move,true);}
 else if(msg.type==='restart'){if(myRole===1)return;initGame();log('房主重新开始了对局');updateStatus();}
 else if(msg.type==='undo-req'){if(undoPending)return;undoPending=true;if(confirm('对方请求悔棋，是否同意？')){if(history.length>0){const h=history.pop();board=h.board;hands=h.hands;turn=h.turn;lastMove=h.lastMove;gameOver=false;statusText='';}client.publish(`shogi/${roomId}/ctrl`,JSON.stringify({type:'undo-ok'}));renderHands();updateStatus();draw();}else{client.publish(`shogi/${roomId}/ctrl`,JSON.stringify({type:'undo-no'}));}undoPending=false;}
 else if(msg.type==='undo-ok'){if(history.length>0){const h=history.pop();board=h.board;hands=h.hands;turn=h.turn;lastMove=h.lastMove;gameOver=false;statusText='';}renderHands();updateStatus();draw();log('悔棋成功');}
